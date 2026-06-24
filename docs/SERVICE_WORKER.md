@@ -55,10 +55,18 @@ self.addEventListener("fetch", (event) => {
    - 認証エラーは 401、権限エラーは 403、その他は 502
 8. `contentType = content-type.resolve(relativePath, mimeType)`
 9. **応答の組み立て（メモリ方針は `PERFORMANCE.md`）**:
+   - **Markdown（`.md` / `.markdown`）** → テキスト取得 → `lib/markdown.ts` で HTML 変換 → `text/html` で返す（キャッシュする）
    - `Range` あり → `206` を `Content-Range` 付きでストリーミング透過（非キャッシュ）
    - `Content-Length` が `LARGE_FILE_THRESHOLD` 超 → `body` をストリーミング透過（非キャッシュ）
    - それ以外（小ファイル）→ `arrayBuffer()` 化して `Response` を作り、`cache.put` してから返す
-10. いずれも `Accept-Ranges: bytes` を付与する
+10. いずれも（Markdown を除き）`Accept-Ranges: bytes` を付与する
+
+### エントリの決定（特定ファイル単体プレビュー）
+
+`start_preview` 受信時、`resolveDriveTarget` が以下でエントリを確定する：
+
+- **`fileId` がある**（ファイルを開いている／選択中）→ `files.get` で親フォルダ・名前を逆引きし、**そのファイル単体**をエントリにする（`index.html` 以外でも可）
+- **`parentId` のみ**（フォルダを開いている）→ `index.html` をエントリにする
 
 ### エラー時の Response
 

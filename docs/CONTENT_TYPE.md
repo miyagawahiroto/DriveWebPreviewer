@@ -48,6 +48,10 @@ resolve(relativePath, driveMimeType?): string
 | `wasm` | `application/wasm` |
 | `pdf` | `application/pdf` |
 
+## 3.5 Markdown（.md / .markdown）
+
+`.md` / `.markdown` は**そのまま配信せず、Service Worker でサーバー側 HTML に変換**して `text/html; charset=utf-8` で返す（`lib/markdown.ts`、`marked` を使用）。ブラウザは Markdown をレンダリングできないため、変換が必要。詳細は `SERVICE_WORKER.md`。
+
 ## 4. 注意
 
 - JS は `text/javascript`（MIME チェックに引っかからないよう `application/javascript` ではなくこちらを基本にする）

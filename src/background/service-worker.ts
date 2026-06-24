@@ -19,6 +19,7 @@ import {
   getMediaRaw,
 } from "../lib/drive-api.js";
 import { getDemoFile } from "../lib/demo-content.js";
+import { isMarkdown, renderMarkdown } from "../lib/markdown.js";
 import { isRequestMessage, type StartPreviewResponse } from "../types/message.js";
 import { ensureToken, isSignedIn } from "../lib/auth.js";
 import { DEMO_ROOT, type PreviewSession } from "../types/preview.js";
@@ -138,6 +139,18 @@ async function serveFromDrive(
 ): Promise<Response> {
   const resolved = await resolvePathCached(session, relativePath);
   if (!resolved) return errorResponse(404, `ファイルが見つかりません: ${relativePath}`);
+
+  // Markdown はサーバー側で HTML に変換して表示する
+  if (isMarkdown(relativePath)) {
+    const mdRes = await getMediaRaw(resolved.fileId);
+    const md = await mdRes.text();
+    const html = await renderMarkdown(md, relativePath.split("/").pop() ?? relativePath);
+    const response = new Response(html, {
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+    await cache.put(session.sessionId, relativePath, response.clone());
+    return response;
+  }
 
   const driveRes = await getMediaRaw(resolved.fileId, rangeHeader);
   const type = contentType.resolve(relativePath, resolved.mimeType);
@@ -268,29 +281,35 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 /**
  * start_preview メッセージから、配信元・ルートフォルダ・エントリ名を確定する。
- * - parentId があればそのまま使う（フォルダを開いた導線）
- * - parentId が無く fileId があれば、Drive API でファイルの親フォルダと名前を逆引きする（ファイルを開いた導線）
+ * 優先順位：
+ * 1. fileId がある（特定ファイルを開いている／選択している）→ そのファイル 1 つをエントリにする。
+ *    親フォルダ・ファイル名は Drive API（files.get の parents/name）で逆引きし、相対パスは
+ *    そのファイルの親フォルダ基準で解決する。
+ * 2. fileId が無く parentId のみ（フォルダを開いている）→ index.html をエントリにする。
  */
 async function resolveDriveTarget(
   message: { fileId: string; parentId: string; fileName: string },
 ): Promise<Pick<PreviewSession, "source" | "rootFolderId" | "entryFileName">> {
-  let rootFolderId = message.parentId;
-  let entryFileName = message.fileName;
-
-  if (!rootFolderId) {
-    if (!message.fileId) {
-      throw new Error("プレビュー対象を特定できませんでした。");
-    }
+  // 1. 特定ファイル指定が最優先（index.html 以外でも、そのファイル単体をプレビュー）
+  if (message.fileId) {
     const meta = await getFileMeta(message.fileId);
-    rootFolderId = meta.parents[0] ?? "";
+    const rootFolderId = meta.parents[0] ?? message.parentId;
     if (!rootFolderId) {
       throw new Error("親フォルダを特定できませんでした（共有や階層を確認してください）。");
     }
-    if (!entryFileName) entryFileName = meta.name;
+    return { source: "drive", rootFolderId, entryFileName: meta.name };
   }
 
-  if (!entryFileName) entryFileName = "index.html";
-  return { source: "drive", rootFolderId, entryFileName };
+  // 2. フォルダを開いている場合は index.html をエントリにする
+  if (message.parentId) {
+    return {
+      source: "drive",
+      rootFolderId: message.parentId,
+      entryFileName: message.fileName || "index.html",
+    };
+  }
+
+  throw new Error("プレビュー対象を特定できませんでした。");
 }
 
 /** プレビューセッションを生成し、専用タブを開く。 */

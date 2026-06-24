@@ -20,20 +20,43 @@ function folderIdFromUrl(): string | null {
 }
 
 /**
- * プレビュー対象の情報を取得する。
- * - フォルダを開いている場合: 親フォルダ ID を URL から取得し、エントリは index.html と仮定
- * - ファイルを開いている場合: ファイル ID のみ渡し、親フォルダ・ファイル名は background が
- *   Drive API（files.get の parents/name）で逆引きする
- * いずれも空文字は「未取得」を表す。
+ * フォルダ表示で「選択中」のアイテムの Drive ファイル ID を DOM から推定する（best-effort）。
+ * Drive の DOM 構造は変化しうるため、取得できなければ null を返す（壊れたらここを直す）。
+ */
+function selectedFileIdFromDom(): string | null {
+  const selected = document.querySelector('[aria-selected="true"]');
+  if (!selected) return null;
+  // 選択要素自身、または子孫から data-id（Drive のファイル ID）を探す
+  const holder = selected.matches("[data-id]")
+    ? selected
+    : selected.querySelector("[data-id]");
+  const id = holder?.getAttribute("data-id") ?? null;
+  // フォルダ自身の id（URL の folderId）と一致する場合は選択ではないので除外
+  if (id && id === folderIdFromUrl()) return null;
+  return id;
+}
+
+/**
+ * プレビュー対象を取得する。優先順位：
+ * 1. ファイルを開いている（URL: /file/d/<id>）→ そのファイル
+ * 2. フォルダ表示で特定ファイルを選択中（DOM）→ その選択ファイル（index.html 以外でも可）
+ * 3. フォルダのみ → index.html を既定エントリ
+ * 親フォルダ ID・ファイル名は、fileId がある場合は background が Drive API で逆引きする。
  */
 function collectTarget(): { fileId: string; parentId: string; fileName: string } | null {
+  const openedFileId = fileIdFromUrl();
+  if (openedFileId) {
+    return { fileId: openedFileId, parentId: "", fileName: "" };
+  }
+
   const folderId = folderIdFromUrl();
+  const selectedFileId = selectedFileIdFromDom();
+  if (selectedFileId) {
+    return { fileId: selectedFileId, parentId: folderId ?? "", fileName: "" };
+  }
+
   if (folderId) {
     return { fileId: "", parentId: folderId, fileName: "index.html" };
-  }
-  const fileId = fileIdFromUrl();
-  if (fileId) {
-    return { fileId, parentId: "", fileName: "" };
   }
   return null;
 }

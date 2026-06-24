@@ -11,16 +11,17 @@
 - Drive のファイル一覧 / プレビュー画面に「Web プレビュー」ボタンを注入する
 - ユーザーが対象 HTML を選択した状態でボタンを押すと、`fileId` / `parentId`（親フォルダ ID）/ `fileName` を取得し、`start_preview` メッセージを background へ送る
 
-### プレビュー対象の取得（2 つの導線）
+### プレビュー対象の取得（優先順位）
 
-Drive の URL は「フォルダを開く」と「ファイルを開く」で形が異なり、両方には対応しない：
+content-script は次の優先順位で対象を決める：
 
-1. **フォルダを開いている**（URL: `/folders/<folderId>`）→ `parentId = folderId`、エントリは `index.html` と仮定して送る
-2. **ファイルを開いている**（URL: `/file/d/<fileId>/`）→ `fileId` のみ送り、**親フォルダ ID とファイル名は background が Drive API（`files.get` の `parents` / `name`）で逆引き**する
+1. **ファイルを開いている**（URL: `/file/d/<fileId>/`）→ `fileId` を送る → **そのファイル単体**をプレビュー
+2. **フォルダ表示で特定ファイルを選択中**（DOM の `[aria-selected="true"]` 配下の `data-id`）→ その `fileId` を送る → **選択ファイル単体**（`index.html` 以外でも）
+3. **フォルダのみ**（URL: `/folders/<folderId>`）→ `parentId` を送り、エントリは `index.html` と仮定
 
-どちらも取得できない場合のみ、ユーザーに「フォルダまたはファイルを開いた状態で実行」するよう促す。
+`fileId` がある場合、親フォルダ ID とファイル名は background が Drive API（`files.get` の `parents` / `name`）で逆引きし、相対パスはそのファイルの親フォルダ基準で解決する。
 
-> Drive の DOM 構造は変化しうるため、選択中アイテムの DOM 属性（`data-id` 等）からの取得は将来のフォールバックとして追加検討する。
+> 選択中アイテムの DOM 取得（2）は Drive の DOM 構造に依存するため壊れやすい。取得できない場合は 1・3 にフォールバックする。最も確実なのは「ファイルを開いて実行」（1）。
 
 注入する DOM・取得ロジックは Drive 側の変更に弱いため、`docs/` とコードコメントに「壊れたらここを直す」ポイントを明記する。
 
