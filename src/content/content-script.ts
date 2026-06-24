@@ -63,6 +63,14 @@ function collectTarget(): { fileId: string; parentId: string; fileName: string }
 }
 
 function startPreview(): void {
+  // 拡張をリロード／更新すると、開いたままのタブに残った古いコンテンツスクリプトは
+  // 拡張コンテキストを失い chrome.runtime が undefined になる。再読込を促して終了する。
+  if (!chrome.runtime?.id) {
+    alert(
+      "拡張機能が更新されました。\nこの Drive のページを再読み込み（F5）してから、もう一度お試しください。",
+    );
+    return;
+  }
   const target = collectTarget();
   if (!target) {
     alert(
