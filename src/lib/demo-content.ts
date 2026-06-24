@@ -60,9 +60,12 @@ const APP_JS = `document.addEventListener("DOMContentLoaded", () => {
 });
 `;
 
-const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="72" height="72">
-  <rect width="72" height="72" rx="16" fill="#1a73e8" />
-  <path d="M20 36 L32 48 L52 24" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="16" fill="#4285F4" />
+  <rect x="19" y="14" width="26" height="36" rx="5" fill="#ffffff" />
+  <rect x="24" y="23" width="16" height="3" rx="1.5" fill="#4285F4" />
+  <rect x="24" y="30" width="16" height="3" rx="1.5" fill="#4285F4" />
+  <rect x="24" y="37" width="10" height="3" rx="1.5" fill="#4285F4" />
 </svg>
 `;
 
