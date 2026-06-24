@@ -67,6 +67,17 @@ getFileMeta(fileId): Promise<{ name: string; parents: string[] }>
 - `files/{fileId}?fields=id,name,parents` を取得
 - `parents[0]` をプレビューのルートフォルダ、`name` をエントリファイル名として使う
 
+## 3.6 フォルダ内ファイル一覧（listFolderFiles）
+
+フォルダ選択時のエントリ自動判定に使う。
+
+```
+listFolderFiles(folderId): Promise<DriveFile[]>
+```
+
+- `q`: `'<folderId>' in parents and trashed = false and mimeType != '<folder>'`、`orderBy=name`
+- 呼び出し側（Service Worker `pickFolderEntry`）が `index.html` → html → md → txt の順でエントリを決定する
+
 ## 4. フォルダ取得（listFolder）
 
 パス解決で階層を辿るため、サブフォルダ ID を引く：

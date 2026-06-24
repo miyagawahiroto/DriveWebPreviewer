@@ -8,7 +8,8 @@
     "dev": "node build.mjs --watch",
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "package": "npm run build && cd dist && zip -r -X ../drive-web-previewer.zip . -x '.*' '**/.*' && cd .."
   },
   "devDependencies": {
     "@types/chrome": "^0.0.268",

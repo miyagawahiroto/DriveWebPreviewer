@@ -5,7 +5,7 @@
 
 import { build, context } from "esbuild";
 import { cp, mkdir, rm } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,6 +13,27 @@ const root = dirname(fileURLToPath(import.meta.url));
 const srcDir = resolve(root, "src");
 const outDir = resolve(root, "dist");
 const watch = process.argv.includes("--watch");
+
+/** .env.local（git 管理外）を読み込む。値はビルド時にのみ使用し、コミットしない。 */
+function loadEnvLocal() {
+  const file = resolve(root, ".env.local");
+  const env = {};
+  if (!existsSync(file)) return env;
+  for (const line of readFileSync(file, "utf8").split("\n")) {
+    const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$/);
+    if (m && !line.trim().startsWith("#")) {
+      env[m[1]] = m[2].replace(/^["']|["']$/g, "");
+    }
+  }
+  return env;
+}
+
+const localEnv = loadEnvLocal();
+for (const key of ["DWP_PICKER_API_KEY", "DWP_GCP_PROJECT_NUMBER"]) {
+  if (!localEnv[key]) {
+    console.warn(`[build] ${key} が未設定です（Picker 機能は動作しません）。.env.local を確認してください。`);
+  }
+}
 
 /** バンドル対象のエントリ（入力 → 出力パス） */
 const entryPoints = {
@@ -40,6 +61,12 @@ const buildOptions = {
   sourcemap: watch ? "inline" : false,
   minify: !watch,
   logLevel: "info",
+  // ビルド時注入（.env.local の値。リポジトリには含めない）
+  // 環境固有値はソースに直書きせず、参考値は .env.example にのみ記載する
+  define: {
+    __PICKER_API_KEY__: JSON.stringify(localEnv.DWP_PICKER_API_KEY ?? ""),
+    __GCP_PROJECT_NUMBER__: JSON.stringify(localEnv.DWP_GCP_PROJECT_NUMBER ?? ""),
+  },
 };
 
 async function copyStatic() {

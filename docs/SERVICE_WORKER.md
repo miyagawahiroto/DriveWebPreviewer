@@ -65,8 +65,13 @@ self.addEventListener("fetch", (event) => {
 
 `start_preview` 受信時、`resolveDriveTarget` が以下でエントリを確定する：
 
-- **`fileId` がある**（ファイルを開いている／選択中）→ `files.get` で親フォルダ・名前を逆引きし、**そのファイル単体**をエントリにする（`index.html` 以外でも可）
-- **`parentId` のみ**（フォルダを開いている）→ `index.html` をエントリにする
+- **`fileId` がある**（ファイル/フォルダを開いている／選択中）→ `files.get` で `mimeType`・親フォルダ・名前を取得し分岐：
+  - **フォルダだった場合** → そのフォルダをルートにして `pickFolderEntry` でエントリ判定（フォルダ選択時に本体ダウンロードして 403 になるのを防ぐ）
+  - **ファイルだった場合** → 親フォルダをルートに、**そのファイル単体**をエントリにする（`index.html` 以外でも可）
+- **`parentId` のみ**（フォルダを開いている）→ `pickFolderEntry` でエントリを自動判定：
+  1. `index.html` があればそれ
+  2. 無ければ **html → md → txt** の順で、名前順の最初のファイル（`listFolderFiles`）
+  3. 該当なし → エラー（表示できるファイルが無い）
 
 ### エラー時の Response
 

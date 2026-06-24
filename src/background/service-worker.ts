@@ -17,12 +17,14 @@ import {
   DriveForbiddenError,
   getFileMeta,
   getMediaRaw,
+  listFolderFiles,
 } from "../lib/drive-api.js";
 import { getDemoFile } from "../lib/demo-content.js";
 import { isMarkdown, renderMarkdown } from "../lib/markdown.js";
 import { isRequestMessage, type StartPreviewResponse } from "../types/message.js";
 import { ensureToken, isSignedIn } from "../lib/auth.js";
 import { DEMO_ROOT, type PreviewSession } from "../types/preview.js";
+import { DRIVE_FOLDER_MIME } from "../types/drive.js";
 
 // Service Worker のグローバルスコープ（DOM lib と併用のため明示的にキャスト）
 const sw = self as unknown as ServiceWorkerGlobalScope;
@@ -290,9 +292,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 async function resolveDriveTarget(
   message: { fileId: string; parentId: string; fileName: string },
 ): Promise<Pick<PreviewSession, "source" | "rootFolderId" | "entryFileName">> {
-  // 1. 特定ファイル指定が最優先（index.html 以外でも、そのファイル単体をプレビュー）
+  // 1. ID 指定がある場合（ファイルを開く／フォルダ・ファイルを選択）
   if (message.fileId) {
     const meta = await getFileMeta(message.fileId);
+
+    // フォルダが選ばれた → そのフォルダをルートに index.html → html → md → txt で判定
+    if (meta.mimeType === DRIVE_FOLDER_MIME) {
+      const entryFileName = await pickFolderEntry(message.fileId);
+      return { source: "drive", rootFolderId: message.fileId, entryFileName };
+    }
+
+    // ファイルが選ばれた → そのファイル単体（index.html 以外でも）
     const rootFolderId = meta.parents[0] ?? message.parentId;
     if (!rootFolderId) {
       throw new Error("親フォルダを特定できませんでした（共有や階層を確認してください）。");
@@ -300,16 +310,40 @@ async function resolveDriveTarget(
     return { source: "drive", rootFolderId, entryFileName: meta.name };
   }
 
-  // 2. フォルダを開いている場合は index.html をエントリにする
+  // 2. フォルダを開いている（URL の folderId のみ）→ エントリを自動判定
   if (message.parentId) {
-    return {
-      source: "drive",
-      rootFolderId: message.parentId,
-      entryFileName: message.fileName || "index.html",
-    };
+    const entryFileName = message.fileName || (await pickFolderEntry(message.parentId));
+    return { source: "drive", rootFolderId: message.parentId, entryFileName };
   }
 
   throw new Error("プレビュー対象を特定できませんでした。");
+}
+
+/**
+ * フォルダのエントリファイル名を決める。
+ * 1. index.html があればそれ
+ * 2. 無ければ html → md → txt の順で、名前順の最初のファイル
+ * 該当が無ければエラー。
+ */
+async function pickFolderEntry(folderId: string): Promise<string> {
+  const files = await listFolderFiles(folderId);
+  const lower = (name: string) => name.toLowerCase();
+
+  const index = files.find((f) => lower(f.name) === "index.html");
+  if (index) return index.name;
+
+  const firstWith = (exts: string[]) =>
+    files.find((f) => exts.some((ext) => lower(f.name).endsWith(ext)));
+
+  const entry =
+    firstWith([".html", ".htm"]) ??
+    firstWith([".md", ".markdown"]) ??
+    firstWith([".txt"]);
+
+  if (!entry) {
+    throw new Error("表示できるファイル（html / md / txt）がフォルダ内に見つかりません。");
+  }
+  return entry.name;
 }
 
 /** プレビューセッションを生成し、専用タブを開く。 */

@@ -118,18 +118,40 @@ export function findFolder(
 }
 
 /**
+ * 指定フォルダ直下の（フォルダ以外の）ファイル一覧を名前順で取得する。
+ * フォルダ選択時のエントリ自動判定に使う。
+ */
+export async function listFolderFiles(folderId: string): Promise<DriveFile[]> {
+  const params = new URLSearchParams({
+    q: `'${escapeQueryValue(folderId)}' in parents and trashed = false and mimeType != '${DRIVE_FOLDER_MIME}'`,
+    fields: "files(id,name,mimeType,modifiedTime,createdTime)",
+    orderBy: "name",
+    pageSize: "200",
+    spaces: "drive",
+  });
+  const res = await authedFetch(`${DRIVE_API_BASE}/files?${params.toString()}`);
+  if (res.status === 404) return [];
+  const data = (await res.json()) as DriveListResponse;
+  return data.files ?? [];
+}
+
+/**
  * ファイルのメタ情報（名前・親フォルダ）を取得する。
  * ファイルを開いた状態からプレビューする際に、親フォルダ ID とエントリ名を逆引きするのに使う。
  */
 export async function getFileMeta(
   fileId: string,
-): Promise<{ name: string; parents: string[] }> {
-  const params = new URLSearchParams({ fields: "id,name,parents" });
+): Promise<{ name: string; mimeType: string; parents: string[] }> {
+  const params = new URLSearchParams({ fields: "id,name,mimeType,parents" });
   const res = await authedFetch(
     `${DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?${params.toString()}`,
   );
-  const data = (await res.json()) as { name: string; parents?: string[] };
-  return { name: data.name, parents: data.parents ?? [] };
+  const data = (await res.json()) as {
+    name: string;
+    mimeType: string;
+    parents?: string[];
+  };
+  return { name: data.name, mimeType: data.mimeType, parents: data.parents ?? [] };
 }
 
 /**

@@ -56,7 +56,8 @@ function collectTarget(): { fileId: string; parentId: string; fileName: string }
   }
 
   if (folderId) {
-    return { fileId: "", parentId: folderId, fileName: "index.html" };
+    // fileName は空にして、エントリ（index.html → html → md → txt）は background に判定させる
+    return { fileId: "", parentId: folderId, fileName: "" };
   }
   return null;
 }

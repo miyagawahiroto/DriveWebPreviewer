@@ -8,9 +8,13 @@ dist/
 # 環境変数・機密値（Secret は別管理。コミット禁止）
 .env
 .env.*
+!.env.example
 **/client_secret*.json
 **/service-account*.json
 *.pem
+
+# 提供アイコン元画像（任意）
+# DriveWebPreviewer.png
 
 # OS / エディタ
 .DS_Store
