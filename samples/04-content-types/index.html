@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>04 複数コンテンツタイプ</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="card">
+      <h1>04 複数 Content-Type</h1>
+      <p>SVG・PNG（バイナリ）・JSON（fetch）・CSS・JS を検証。</p>
+      <div class="imgs">
+        <img src="icon.svg" alt="svg icon" width="64" height="64" />
+        <img src="pixel.png" alt="png image" width="64" height="64" />
+      </div>
+      <ul>
+        <li class="ok">✓ HTML がレンダリングされた</li>
+        <li id="css">… CSS 未適用</li>
+        <li id="js">… JS 未実行</li>
+        <li id="svg">… SVG 未確認</li>
+        <li id="png">… PNG（バイナリ）未確認</li>
+        <li id="json">… JSON（fetch）未確認</li>
+      </ul>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>

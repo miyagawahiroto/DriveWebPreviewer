@@ -1,0 +1,19 @@
+{
+  "name": "drive-web-previewer",
+  "version": "0.1.0",
+  "description": "Google Drive 上の Web ページを外部にアクセス権限を渡さずプレビューする Chrome 拡張機能（Manifest V3）",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node build.mjs --watch",
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

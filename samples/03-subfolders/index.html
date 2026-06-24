@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>03 サブフォルダの相対パス</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div class="card">
+      <h1>03 サブフォルダ解決</h1>
+      <p>サブフォルダ参照: <code>css/style.css</code> / <code>js/app.js</code> / <code>assets/logo.svg</code></p>
+      <img src="assets/logo.svg" alt="logo" width="72" height="72" />
+      <ul>
+        <li class="ok">✓ HTML がレンダリングされた</li>
+        <li id="css">… CSS（css/style.css）未適用</li>
+        <li id="js">… JS（js/app.js）未実行</li>
+        <li id="img">… 画像（assets/logo.svg）未確認</li>
+      </ul>
+    </div>
+    <script src="js/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+:root { color-scheme: light; }
+body { --css-marker: "loaded"; }
+body {
+  font-family: system-ui, sans-serif;
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #fce8e6, #fff);
+  color: #202124;
+}
+.card {
+  background: #fff;
+  padding: 2rem 2.5rem;
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(197, 34, 31, 0.15);
+  max-width: 480px;
+  text-align: center;
+}
+h1 { color: #c5221f; margin-top: 0; }
+.imgs { display: flex; gap: 16px; justify-content: center; margin: 12px 0; }
+ul { text-align: left; line-height: 1.9; display: inline-block; }
+.ok { color: #137333; font-weight: 600; }
+.ng { color: #c5221f; font-weight: 600; }

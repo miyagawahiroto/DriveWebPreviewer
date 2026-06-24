@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DriveWebPreviewer</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        width: 280px;
+        margin: 0;
+        padding: 16px;
+        color: #202124;
+      }
+      h1 {
+        font-size: 15px;
+        margin: 0 0 12px;
+      }
+      .status {
+        font-size: 13px;
+        margin-bottom: 12px;
+      }
+      .status .signed-in {
+        color: #137333;
+      }
+      .status .signed-out {
+        color: #c5221f;
+      }
+      button {
+        width: 100%;
+        padding: 9px 0;
+        border: none;
+        border-radius: 8px;
+        background: #1a73e8;
+        color: #fff;
+        font-size: 13px;
+        cursor: pointer;
+        margin-bottom: 8px;
+      }
+      button.secondary {
+        background: #f1f3f4;
+        color: #202124;
+      }
+      a {
+        font-size: 12px;
+        color: #1a73e8;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>DriveWebPreviewer</h1>
+    <div class="status" id="status">認証状態を確認中…</div>
+    <button id="signin">Google でサインイン</button>
+    <button id="demo" class="secondary">デモを開く（OAuth 不要）</button>
+    <a href="#" id="open-options">設定</a>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

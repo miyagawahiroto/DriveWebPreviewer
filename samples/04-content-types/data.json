@@ -1,0 +1,4 @@
+{
+  "message": "data.json を application/json として取得できました",
+  "items": ["html", "css", "js", "svg", "png", "json"]
+}
