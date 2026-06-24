@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Read",
+      "Write",
+      "Edit",
+      "MultiEdit",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "Task",
+      "TodoWrite",
+      "NotebookEdit"
+    ],
+    "defaultMode": "bypassPermissions",
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Read(./**/client_secret*.json)",
+      "Read(./**/*.pem)",
+      "Read(./**/service-account*.json)",
+      "Write(./.env)",
+      "Write(./.env.*)",
+      "Write(./production.config.*)",
+      "Write(./**/client_secret*.json)",
+      "Bash(npx chrome-webstore-upload-cli:*)",
+      "Bash(chrome-webstore-upload:*)",
+      "Bash(gcloud iam service-accounts keys create:*)",
+      "Bash(gcloud projects add-iam-policy-binding * --role=roles/owner*)",
+      "Bash(gcloud projects add-iam-policy-binding * --role=roles/editor*)"
+    ]
+  }
+}
