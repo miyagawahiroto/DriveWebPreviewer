@@ -4,7 +4,7 @@
 // 使い方: node build.mjs [--watch]
 
 import { build, context } from "esbuild";
-import { cp, mkdir, rm } from "node:fs/promises";
+import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,14 @@ const root = dirname(fileURLToPath(import.meta.url));
 const srcDir = resolve(root, "src");
 const outDir = resolve(root, "dist");
 const watch = process.argv.includes("--watch");
+// リリース（ストア公開）ビルド。manifest に公開版の key と client_id を注入する。
+const release = process.argv.includes("--release");
+
+// 公開版（ストア）アイテムの公開鍵（公開値・非機密）。
+// リリースビルドで manifest.key に注入し、ローカル unpacked と公開版の拡張機能 ID
+// （jgebfohfmadmkcdcondhhhjjmcelbgfd）を一致させる。
+const RELEASE_KEY =
+  "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5h2FAhJv8h7g3wxtarSiPtK1zDq8Ns4l1OQkd5DknzqsixyZ/6tyTZd6FAbJ8hyfjEBIu1/J26YKmnTmx7IVwZew06rdpHUL5rZ79GGYb16cVFMSiCQolsf5hghXkZPu1mOcD3IESGRR+e2DziFShSUNt8grwpbPiIchvTyGS1kpig8xFGxO7gnP5MKr6X6IZyzhG4VErof8zhs/MEqo4Ngq8kCPvrDIWxJszZ/B4N8nwXqFl+r8fINbLqL2Nayru9VmpFRl47YONiSlh36KpowBJHxUEwEC1yBRAsJ7m8ljDm9znjndgknqxf/xLNAwdlGeuvSkKMsQqTbZ7IEaJwIDAQAB";
 
 /** .env.local（git 管理外）を読み込む。値はビルド時にのみ使用し、コミットしない。 */
 function loadEnvLocal() {
@@ -43,9 +51,8 @@ const entryPoints = {
   "options/options": resolve(srcDir, "options/options.ts"),
 };
 
-/** dist へそのままコピーする静的アセット（src からの相対パス） */
+/** dist へそのままコピーする静的アセット（manifest.json は writeManifest で別途生成） */
 const staticAssets = [
-  "manifest.json",
   "popup/popup.html",
   "options/options.html",
   "preview/loading.html",
@@ -69,7 +76,28 @@ const buildOptions = {
   },
 };
 
+/** manifest.json を生成する。リリース時のみ key と公開用 client_id を注入する。 */
+async function writeManifest() {
+  const manifest = JSON.parse(readFileSync(resolve(srcDir, "manifest.json"), "utf8"));
+  if (release) {
+    manifest.key = RELEASE_KEY;
+    const clientId = localEnv.DWP_RELEASE_CLIENT_ID;
+    if (clientId) {
+      // 公開版（jgebf…）用 client_id で上書き
+      manifest.oauth2 = { ...manifest.oauth2, client_id: clientId };
+    } else {
+      console.warn(
+        "[build] release: DWP_RELEASE_CLIENT_ID 未設定。dev 用 client_id のままです" +
+          "（公開版 jgebf… ではサインインに失敗します）。.env.local に公開用クライアントを設定してください。",
+      );
+    }
+  }
+  await mkdir(outDir, { recursive: true });
+  await writeFile(resolve(outDir, "manifest.json"), JSON.stringify(manifest, null, 2));
+}
+
 async function copyStatic() {
+  await writeManifest();
   for (const rel of staticAssets) {
     const from = resolve(srcDir, rel);
     if (!existsSync(from)) {

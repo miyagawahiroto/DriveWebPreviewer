@@ -9,7 +9,7 @@
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "package": "npm run build && cd dist && zip -r -X ../drive-web-previewer.zip . -x '.*' '**/.*' && cd .."
+    "package": "node build.mjs --release && cd dist && zip -r -X ../drive-web-previewer.zip . -x '.*' '**/.*' && cd .."
   },
   "devDependencies": {
     "@types/chrome": "^0.0.268",

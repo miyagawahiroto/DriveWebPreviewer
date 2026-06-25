@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DriveWebPreviewer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Google Drive 上の HTML/CSS/JS で構成された Web ページを、外部にアクセス権限を渡さずそのままプレビューします。",
   "minimum_chrome_version": "114",
   "background": {
@@ -41,7 +41,7 @@
     }
   ],
   "oauth2": {
-    "client_id": "162512121004-u9klnp9809rqssjuklssvofot3iffv7m.apps.googleusercontent.com",
+    "client_id": "162512121004-ll65bcgepaostkl9ptoo3mvqlmidngo3.apps.googleusercontent.com",
     "scopes": ["https://www.googleapis.com/auth/drive.readonly"]
   }
 }
