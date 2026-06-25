@@ -39,9 +39,5 @@
       "resources": ["preview/*"],
       "matches": ["https://drive.google.com/*"]
     }
-  ],
-  "oauth2": {
-    "client_id": "162512121004-ll65bcgepaostkl9ptoo3mvqlmidngo3.apps.googleusercontent.com",
-    "scopes": ["https://www.googleapis.com/auth/drive.readonly"]
-  }
+  ]
 }

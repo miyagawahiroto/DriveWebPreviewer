@@ -16,10 +16,12 @@ const watch = process.argv.includes("--watch");
 // リリース（ストア公開）ビルド。manifest に公開版の key と client_id を注入する。
 const release = process.argv.includes("--release");
 
-// 公開版（ストア）アイテムの公開鍵（公開値・非機密）。
+// 公開版（ストア）アイテムの公開鍵（公開値・非機密）の既定値。
 // リリースビルドで manifest.key に注入し、ローカル unpacked と公開版の拡張機能 ID
 // （jgebfohfmadmkcdcondhhhjjmcelbgfd）を一致させる。
-const RELEASE_KEY =
+// 環境ごとに差し替えたい場合は .env.local の DWP_RELEASE_KEY で上書きできる（後述）。
+// 未設定なら必須値であるこの既定値を使う（消えると公開版の ID 不一致でサインインが壊れるため）。
+const DEFAULT_RELEASE_KEY =
   "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5h2FAhJv8h7g3wxtarSiPtK1zDq8Ns4l1OQkd5DknzqsixyZ/6tyTZd6FAbJ8hyfjEBIu1/J26YKmnTmx7IVwZew06rdpHUL5rZ79GGYb16cVFMSiCQolsf5hghXkZPu1mOcD3IESGRR+e2DziFShSUNt8grwpbPiIchvTyGS1kpig8xFGxO7gnP5MKr6X6IZyzhG4VErof8zhs/MEqo4Ngq8kCPvrDIWxJszZ/B4N8nwXqFl+r8fINbLqL2Nayru9VmpFRl47YONiSlh36KpowBJHxUEwEC1yBRAsJ7m8ljDm9znjndgknqxf/xLNAwdlGeuvSkKMsQqTbZ7IEaJwIDAQAB";
 
 /** .env.local（git 管理外）を読み込む。値はビルド時にのみ使用し、コミットしない。 */
@@ -37,10 +39,30 @@ function loadEnvLocal() {
 }
 
 const localEnv = loadEnvLocal();
-for (const key of ["DWP_PICKER_API_KEY", "DWP_GCP_PROJECT_NUMBER"]) {
-  if (!localEnv[key]) {
-    console.warn(`[build] ${key} が未設定です（Picker 機能は動作しません）。.env.local を確認してください。`);
-  }
+
+// launchWebAuthFlow 用 OAuth クライアント ID（ウェブ アプリケーション型・公開値）。
+// dev と release で別クライアントを使う。承認済みリダイレクト URI に
+// chrome.identity.getRedirectURL() の値（https://<拡張機能ID>.chromiumapp.org/）を登録すること。
+const OAUTH_CLIENT_ID_ENV = release ? "DWP_RELEASE_CLIENT_ID" : "DWP_DEV_CLIENT_ID";
+const oauthClientId = localEnv[OAUTH_CLIENT_ID_ENV] ?? "";
+if (!oauthClientId) {
+  console.warn(
+    `[build] ${OAUTH_CLIENT_ID_ENV} が未設定です（サインインに失敗します）。.env.local を確認してください。`,
+  );
+}
+
+// 公開版アイテムの公開鍵。.env.local の DWP_RELEASE_KEY があれば上書き、無ければ既定値。
+const RELEASE_KEY = localEnv.DWP_RELEASE_KEY || DEFAULT_RELEASE_KEY;
+
+// dev（unpacked）の拡張機能 ID を固定するための公開鍵（任意）。release 用とは別の鍵にすること
+// （DEV と PROD で拡張機能 ID を分けるため）。設定すると dev の ID が安定し、リダイレクト URI の
+// 再登録が不要になる。未設定なら dev は読み込みパス依存の ID（同じ場所から読み込めば不変）。
+const DEV_KEY = localEnv.DWP_DEV_KEY ?? "";
+if (!release && !DEV_KEY) {
+  console.warn(
+    "[build] DWP_DEV_KEY 未設定: dev の拡張機能 ID は読み込みパス依存です" +
+      "（同じ場所から読み込めば不変）。ID を固定したい場合は .env.local に設定してください。",
+  );
 }
 
 /** バンドル対象のエントリ（入力 → 出力パス） */
@@ -71,26 +93,20 @@ const buildOptions = {
   // ビルド時注入（.env.local の値。リポジトリには含めない）
   // 環境固有値はソースに直書きせず、参考値は .env.example にのみ記載する
   define: {
-    __PICKER_API_KEY__: JSON.stringify(localEnv.DWP_PICKER_API_KEY ?? ""),
-    __GCP_PROJECT_NUMBER__: JSON.stringify(localEnv.DWP_GCP_PROJECT_NUMBER ?? ""),
+    __OAUTH_CLIENT_ID__: JSON.stringify(oauthClientId),
   },
 };
 
-/** manifest.json を生成する。リリース時のみ key と公開用 client_id を注入する。 */
+/** manifest.json を生成する。release は公開版 key、dev は（あれば）dev 用 key を注入する。 */
 async function writeManifest() {
   const manifest = JSON.parse(readFileSync(resolve(srcDir, "manifest.json"), "utf8"));
   if (release) {
+    // 公開版（jgebf…）と拡張機能 ID を一致させるための公開鍵。
+    // OAuth クライアント ID は manifest ではなく __OAUTH_CLIENT_ID__（define）経由で注入する。
     manifest.key = RELEASE_KEY;
-    const clientId = localEnv.DWP_RELEASE_CLIENT_ID;
-    if (clientId) {
-      // 公開版（jgebf…）用 client_id で上書き
-      manifest.oauth2 = { ...manifest.oauth2, client_id: clientId };
-    } else {
-      console.warn(
-        "[build] release: DWP_RELEASE_CLIENT_ID 未設定。dev 用 client_id のままです" +
-          "（公開版 jgebf… ではサインインに失敗します）。.env.local に公開用クライアントを設定してください。",
-      );
-    }
+  } else if (DEV_KEY) {
+    // dev 用の別鍵で ID を固定する（PROD とは異なる ID になる）。
+    manifest.key = DEV_KEY;
   }
   await mkdir(outDir, { recursive: true });
   await writeFile(resolve(outDir, "manifest.json"), JSON.stringify(manifest, null, 2));

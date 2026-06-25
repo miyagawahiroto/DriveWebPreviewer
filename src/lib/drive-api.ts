@@ -78,6 +78,9 @@ async function findByName(
     orderBy: "modifiedTime desc",
     pageSize: "10",
     spaces: "drive",
+    // 共有ドライブ（Shared Drive）内のファイルも対象に含める。
+    supportsAllDrives: "true",
+    includeItemsFromAllDrives: "true",
   });
 
   const res = await authedFetch(`${DRIVE_API_BASE}/files?${params.toString()}`);
@@ -128,6 +131,9 @@ export async function listFolderFiles(folderId: string): Promise<DriveFile[]> {
     orderBy: "name",
     pageSize: "200",
     spaces: "drive",
+    // 共有ドライブ（Shared Drive）内のファイルも対象に含める。
+    supportsAllDrives: "true",
+    includeItemsFromAllDrives: "true",
   });
   const res = await authedFetch(`${DRIVE_API_BASE}/files?${params.toString()}`);
   if (res.status === 404) return [];
@@ -142,7 +148,10 @@ export async function listFolderFiles(folderId: string): Promise<DriveFile[]> {
 export async function getFileMeta(
   fileId: string,
 ): Promise<{ name: string; mimeType: string; parents: string[] }> {
-  const params = new URLSearchParams({ fields: "id,name,mimeType,parents" });
+  const params = new URLSearchParams({
+    fields: "id,name,mimeType,parents",
+    supportsAllDrives: "true",
+  });
   const res = await authedFetch(
     `${DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?${params.toString()}`,
   );
@@ -165,7 +174,7 @@ export function getMediaRaw(
 ): Promise<Response> {
   const extra = rangeHeader ? { Range: rangeHeader } : undefined;
   return authedFetch(
-    `${DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?alt=media`,
+    `${DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`,
     extra,
   );
 }

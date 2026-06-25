@@ -45,12 +45,22 @@
         font-size: 12px;
         color: #1a73e8;
       }
+      .hint {
+        font-size: 12px;
+        color: #5f6368;
+        line-height: 1.5;
+        margin: 8px 0 12px;
+      }
     </style>
   </head>
   <body>
     <h1>DriveWebPreviewer</h1>
     <div class="status" id="status">認証状態を確認中…</div>
-    <button id="signin">Google でサインイン</button>
+    <p class="hint">
+      Google ドライブで <strong>index.html を含むフォルダ</strong>を開き、画面右下の
+      「<strong>Web プレビュー</strong>」ボタンを押すとそのまま表示されます。
+    </p>
+    <button id="signin" class="secondary">Google でサインイン</button>
     <button id="demo" class="secondary">デモを開く（OAuth 不要）</button>
     <a href="#" id="open-options">設定</a>
     <script type="module" src="popup.js"></script>

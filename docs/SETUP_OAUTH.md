@@ -60,22 +60,35 @@ npm run build
 
 ## 4. OAuth クライアント ID を作成（人間）
 
+> **重要（方式変更）**: 認証は `chrome.identity.getAuthToken` から **`chrome.identity.launchWebAuthFlow`** に移行した（Google の OAuth カスタム URI スキーム制限により getAuthToken は Chrome 以外で 400 invalid_request になるため。詳細は `AUTH.md`）。これに伴い、OAuth クライアントの種類は **「Chrome 拡張機能」ではなく「ウェブ アプリケーション(Web application)」** を作成する。
+
+まず拡張のリダイレクト URI を確認する。これは拡張機能 ID から決まり、
+
+```
+https://<拡張機能ID>.chromiumapp.org/
+```
+
+の形（拡張のコードでは `chrome.identity.getRedirectURL()` が返す値）。手順 1 でメモした ID を当てはめる。
+
 「Google Auth Platform」→「**クライアント(Clients)**」→「**クライアントを作成**」
 （旧 UI では「API とサービス」→「認証情報」→「認証情報を作成」→「OAuth クライアント ID」）
 
-1. アプリケーションの種類: **Chrome 拡張機能(Chrome Extension)**
-2. **アイテム ID（Item ID）**: 手順 1 でメモした拡張機能 ID を入力
+1. アプリケーションの種類: **ウェブ アプリケーション(Web application)**
+2. **承認済みのリダイレクト URI** に、上記 `https://<拡張機能ID>.chromiumapp.org/` を追加（末尾スラッシュ込み）
 3. 作成すると `xxxxx.apps.googleusercontent.com` 形式の **クライアント ID** が発行される。これをコピー
+   - **クライアントシークレットは使わない**（implicit flow のため不要。コードにも含めない）
 
-## 5. manifest に設定して再ビルド
+## 5. クライアント ID をビルドに設定して再ビルド
 
-`src/manifest.json` の `oauth2.client_id` を、手順 4 のクライアント ID に差し替える：
+クライアント ID は `manifest.json` ではなく **`.env.local`（git 管理外）** から `build.mjs` 経由でコードに注入する（dev / release で別クライアント）。
 
-```jsonc
-"oauth2": {
-  "client_id": "あなたのクライアントID.apps.googleusercontent.com",
-  "scopes": ["https://www.googleapis.com/auth/drive.readonly"]
-}
+`.env.local` に追記：
+
+```bash
+# 開発（unpacked）用クライアント ID
+DWP_DEV_CLIENT_ID=あなたのdevクライアントID.apps.googleusercontent.com
+# 公開（ストア）ビルド用クライアント ID（npm run package / build --release で使用）
+DWP_RELEASE_CLIENT_ID=あなたの公開用クライアントID.apps.googleusercontent.com
 ```
 
 ```bash
@@ -83,6 +96,8 @@ npm run build
 ```
 
 `chrome://extensions` で拡張機能カードの「更新（リロード）」ボタンを押す。
+
+> `DWP_DEV_CLIENT_ID` 未設定のままビルドするとサインインに失敗する（ビルド時に警告が出る）。
 
 ## 6. 動作確認
 
@@ -97,7 +112,9 @@ npm run build
 
 | 症状 | 原因・対処 |
 |------|-----------|
-| `bad client id` / 認証が即失敗 | 手順 1 の拡張機能 ID と、手順 4 でクライアントに登録した ID が一致していない |
+| `Error 400: invalid_request` / `Custom URI scheme is not supported on Chrome apps` / `flowName=GeneralOAuthFlow` | 旧方式（getAuthToken）の名残、または「Chrome 拡張機能」型クライアントを使っている。**「ウェブ アプリケーション」型クライアント**を作り（手順 4）、`DWP_DEV_CLIENT_ID` を設定して再ビルド。`AUTH.md` 参照 |
+| `redirect_uri_mismatch` | クライアントの「承認済みのリダイレクト URI」が `https://<拡張機能ID>.chromiumapp.org/`（末尾スラッシュ込み）と一致していない |
+| `bad client id` / 認証が即失敗 | `DWP_DEV_CLIENT_ID`（または release は `DWP_RELEASE_CLIENT_ID`）が未設定・誤り |
 | `access_denied` | 同意画面のテストユーザーに自分を追加したか、スコープ `drive.readonly` が設定されているか |
 | 認証後も 404 | フォルダを開いた状態で実行したか（親フォルダ ID が URL から取れているか）。`index.html` がそのフォルダ直下にあるか |
 | ある日突然 ID が変わった | `dist/` の場所を変えた／別パスから読み込んだ。下記「ID 固定」を検討 |
@@ -108,14 +125,47 @@ npm run build
 
 | 再現したいもの | 操作 |
 |---------------|------|
-| **トークン取得のやり直し**（アカウント選択程度） | 拡張機能の**設定ページ →「サインアウト（トークン解除）」**（`chrome.identity.clearAllCachedAuthTokens`）|
+| **トークン取得のやり直し**（アカウント選択程度） | 拡張機能の**設定ページ →「サインアウト（トークン解除）」**（`chrome.storage.session` のキャッシュトークンを破棄）|
 | **初回の同意画面まで完全再現** | 上記に加えて、[Google アカウントのアプリ連携](https://myaccount.google.com/connections) で本アプリの**アクセスを削除** |
 
-その後にプレビューを実行すると、未サインイン状態から `ensureToken()` 経由で同意画面が再表示される（`AUTH.md`）。
+その後にポップアップからサインイン、または「Web プレビュー」を実行すると、`getToken(true)` 経由で同意画面が再表示される（`AUTH.md`）。
 
-## 8. 補足: 拡張機能 ID を固定したい場合（`key`）
+## 8. 補足: dev の拡張機能 ID を固定したい場合（`DWP_DEV_KEY`）
 
-別マシンでも同じ ID にしたい、公開版と ID を揃えたい場合は manifest に公開鍵 `key` を入れて ID を固定できる。ローカル単独確認では不要。必要になったら手順を追記する。
+unpacked の拡張機能 ID は読み込みパスから決まるため、**同じ場所から読み込む限りは変わらない**。別マシンでも同じ ID にしたい、`redirect_uri_mismatch` の再登録を避けたい場合は、dev 専用の公開鍵 `key` を入れて ID を固定できる。
+
+> **PROD とは別の鍵にすること**。release は build.mjs の公開版鍵（`DEFAULT_RELEASE_KEY` / `DWP_RELEASE_KEY`）で ID を `jgebf…` に固定する。dev に同じ鍵を使うと **DEV と PROD の ID が衝突**するため、dev は専用鍵にして ID を分ける。
+
+### 8.1 dev 用の鍵ペアを生成
+
+```bash
+# 秘密鍵（.env.local と同様、git にコミットしない。安全に保管）
+openssl genrsa 2048 | openssl pkcs8 -topf8 -nocrypt -out dev-key.pem
+# manifest.key 用の公開鍵（base64・1 行）。この出力を控える
+openssl rsa -in dev-key.pem -pubout -outform DER 2>/dev/null | base64 | tr -d '\n'; echo
+```
+
+### 8.2 `.env.local` に設定して再ビルド
+
+```bash
+DWP_DEV_KEY=<上で出力された base64 公開鍵（1 行）>
+```
+
+```bash
+npm run build
+```
+
+これで dev ビルド（`npm run build` / `npm run dev`）の `manifest.key` に dev 用鍵が注入され、ID が固定される（PROD とは異なる ID）。release（`--release`）は引き続き公開版鍵を使う。
+
+### 8.3 dev の ID とリダイレクト URI を確認・登録
+
+`chrome://extensions` でリロード後、Service Worker コンソールで
+
+```js
+chrome.identity.getRedirectURL()
+```
+
+を実行し、出た `https://<dev-id>.chromiumapp.org/` を **dev 用 OAuth クライアント（`DWP_DEV_CLIENT_ID`）の「承認済みのリダイレクト URI」** に登録する（末尾スラッシュ込み・完全一致）。以後 dev の ID は固定なので再登録は不要。
 
 ## 9. 公開後（ウェブストア）
 

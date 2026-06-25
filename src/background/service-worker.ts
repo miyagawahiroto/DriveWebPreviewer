@@ -243,7 +243,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   switch (message.type) {
     case "start_preview": {
-      // ユーザー操作起点なので、未サインインならここで同意画面を出す（押す→同意→表示）。
+      // 「Web プレビュー」起点（ユーザー操作）。未サインインなら初回のみ同意を出す（押す→同意→表示）。
       void ensureToken()
         .then(() => resolveDriveTarget(message))
         .then((init) => openPreviewTab(init))
@@ -341,7 +341,16 @@ async function pickFolderEntry(folderId: string): Promise<string> {
     firstWith([".txt"]);
 
   if (!entry) {
-    throw new Error("表示できるファイル（html / md / txt）がフォルダ内に見つかりません。");
+    if (files.length === 0) {
+      throw new Error(
+        "フォルダ直下にファイルが見つかりません（空、サブフォルダの中、または共有/権限の可能性）。" +
+          "index.html はフォルダ直下に置いてください。",
+      );
+    }
+    const names = files.map((f) => f.name).slice(0, 8).join(", ");
+    throw new Error(
+      `フォルダ内に html / md / txt が見つかりません（${files.length} 件: ${names}）。`,
+    );
   }
   return entry.name;
 }

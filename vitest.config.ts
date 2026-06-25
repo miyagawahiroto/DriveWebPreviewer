@@ -6,4 +6,8 @@ export default defineConfig({
     include: ["test/**/*.test.ts"],
     environment: "node",
   },
+  // build.mjs が esbuild の define で注入する定数を、テスト時にも解決できるようにする。
+  define: {
+    __OAUTH_CLIENT_ID__: JSON.stringify(""),
+  },
 });
