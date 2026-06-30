@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DriveWebPreviewer",
-  "version": "0.1.2.2",
+  "version": "0.1.3.0",
   "description": "Google Drive 上の HTML/CSS/JS で構成された Web ページを、外部にアクセス権限を渡さずそのままプレビューします。",
   "minimum_chrome_version": "114",
   "background": {

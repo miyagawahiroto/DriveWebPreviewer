@@ -52,6 +52,8 @@ resolve(relativePath, driveMimeType?): string
 
 `.md` / `.markdown` は**そのまま配信せず、Service Worker でサーバー側 HTML に変換**して `text/html; charset=utf-8` で返す（`lib/markdown.ts`、`marked` を使用）。ブラウザは Markdown をレンダリングできないため、変換が必要。詳細は `SERVICE_WORKER.md`。
 
+Markdown 内の ` ```mermaid ` ブロックは、SW では `<pre class="mermaid">` のプレースホルダに変換し、プレビュータブ内のクライアントスクリプト（`assets/mermaid-runtime.js`）が図として描画する。詳細は `MERMAID.md`。
+
 ## 4. 注意
 
 - JS は `text/javascript`（MIME チェックに引っかからないよう `application/javascript` ではなくこちらを基本にする）

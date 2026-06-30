@@ -146,7 +146,11 @@ async function serveFromDrive(
   if (isMarkdown(relativePath)) {
     const mdRes = await getMediaRaw(resolved.fileId);
     const md = await mdRes.text();
-    const html = await renderMarkdown(md, relativePath.split("/").pop() ?? relativePath);
+    // Mermaid 描画ランタイムは preview/ 配下を避け assets/ から配信する（docs/MERMAID.md）
+    const mermaidRuntimeUrl = chrome.runtime.getURL("assets/mermaid-runtime.js");
+    const html = await renderMarkdown(md, relativePath.split("/").pop() ?? relativePath, {
+      mermaidRuntimeUrl,
+    });
     const response = new Response(html, {
       headers: { "Content-Type": "text/html; charset=utf-8" },
     });

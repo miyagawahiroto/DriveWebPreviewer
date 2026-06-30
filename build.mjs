@@ -97,6 +97,23 @@ const buildOptions = {
   },
 };
 
+// Mermaid 描画ランタイム（プレビュータブ内で動く）。docs/MERMAID.md。
+// preview/ は SW の fetch インターセプト対象のため避け、assets/ に出力する。
+// Mermaid は図種別を動的 import で遅延ロードするため splitting を有効化し、
+// チャンクも assets/ 配下（同一オリジン）に置く。
+const mermaidBuildOptions = {
+  entryPoints: { "mermaid-runtime": resolve(srcDir, "preview/mermaid-runtime.ts") },
+  outdir: resolve(outDir, "assets"),
+  bundle: true,
+  format: "esm",
+  target: "chrome114",
+  platform: "browser",
+  splitting: true,
+  sourcemap: watch ? "inline" : false,
+  minify: !watch,
+  logLevel: "info",
+};
+
 /** manifest.json を生成する。release は公開版 key、dev は（あれば）dev 用 key を注入する。 */
 async function writeManifest() {
   const manifest = JSON.parse(readFileSync(resolve(srcDir, "manifest.json"), "utf8"));
@@ -137,12 +154,15 @@ async function run() {
 
   if (watch) {
     const ctx = await context(buildOptions);
+    const mermaidCtx = await context(mermaidBuildOptions);
     await ctx.watch();
+    await mermaidCtx.watch();
     await copyStatic();
     console.log("[build] watching for changes...");
     // 静的アセットの変更はここでは監視しない（必要に応じて拡張）
   } else {
     await build(buildOptions);
+    await build(mermaidBuildOptions);
     await copyStatic();
     console.log("[build] done →", outDir);
   }
