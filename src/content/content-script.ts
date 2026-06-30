@@ -19,27 +19,48 @@ function folderIdFromUrl(): string | null {
   return m ? m[1] : null;
 }
 
+/** ある選択要素から Drive ファイル ID（data-id）を、自身・子孫・祖先の順に探す。 */
+function extractDataId(el: Element): string | null {
+  if (el.matches("[data-id]")) return el.getAttribute("data-id");
+  const child = el.querySelector("[data-id]");
+  if (child) return child.getAttribute("data-id");
+  const ancestor = el.closest("[data-id]");
+  if (ancestor) return ancestor.getAttribute("data-id");
+  return null;
+}
+
 /**
- * フォルダ表示で「選択中」のアイテムの Drive ファイル ID を DOM から推定する（best-effort）。
+ * 一覧で「選択中」のアイテムの Drive ファイル ID を DOM から推定する（best-effort）。
+ * Drive はビュー（マイドライブ / フォルダ / ホーム / 履歴 / 共有アイテム）ごとに
+ * 選択行のマークアップが異なるため、複数のセレクタ・祖先/子孫探索でフォールバックする。
  * Drive の DOM 構造は変化しうるため、取得できなければ null を返す（壊れたらここを直す）。
  */
 function selectedFileIdFromDom(): string | null {
-  const selected = document.querySelector('[aria-selected="true"]');
-  if (!selected) return null;
-  // 選択要素自身、または子孫から data-id（Drive のファイル ID）を探す
-  const holder = selected.matches("[data-id]")
-    ? selected
-    : selected.querySelector("[data-id]");
-  const id = holder?.getAttribute("data-id") ?? null;
-  // フォルダ自身の id（URL の folderId）と一致する場合は選択ではないので除外
-  if (id && id === folderIdFromUrl()) return null;
-  return id;
+  const folderId = folderIdFromUrl();
+  // 選択状態を表しうるセレクタ群（ビューにより異なる）を順に試す。
+  const selectors = [
+    '[aria-selected="true"]',
+    '[data-is-selected="true"]',
+    ".a-s-fa-Ha-pa", // グリッド表示の選択クラス（壊れやすい）
+    '[jsname][aria-selected="true"]',
+  ];
+  for (const selector of selectors) {
+    const candidates = document.querySelectorAll(selector);
+    for (const el of candidates) {
+      const id = extractDataId(el);
+      // フォルダ自身の id（URL の folderId）と一致する場合は選択ではないので除外
+      if (id && id !== folderId) return id;
+    }
+  }
+  return null;
 }
 
 /**
  * プレビュー対象を取得する。優先順位：
  * 1. ファイルを開いている（URL: /file/d/<id>）→ そのファイル
- * 2. フォルダ表示で特定ファイルを選択中（DOM）→ その選択ファイル（index.html 以外でも可）
+ * 2. 一覧で特定ファイルを選択中（DOM）→ その選択ファイル（index.html 以外でも可）。
+ *    ホーム（/drive/home）・履歴（/drive/recent）など URL にフォルダ ID が無いビューでも、
+ *    選択さえ取れれば単体プレビューできる（親フォルダ ID は background が逆引きする）。
  * 3. フォルダのみ → index.html を既定エントリ
  * 親フォルダ ID・ファイル名は、fileId がある場合は background が Drive API で逆引きする。
  */
