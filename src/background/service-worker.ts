@@ -21,6 +21,11 @@ import {
 } from "../lib/drive-api.js";
 import { getDemoFile } from "../lib/demo-content.js";
 import { isMarkdown, renderMarkdown } from "../lib/markdown.js";
+import { hasRelativeSubresource } from "../lib/html-analyze.js";
+import {
+  inlineHtmlResources,
+  type ResourceFetcher,
+} from "../lib/inline-resources.js";
 import { isRequestMessage, type StartPreviewResponse } from "../types/message.js";
 import { ensureToken, isSignedIn } from "../lib/auth.js";
 import { DEMO_ROOT, type PreviewSession } from "../types/preview.js";
@@ -121,6 +126,87 @@ ${detailHtml}
   });
 }
 
+// ---- サンドボックス表示（自己完結 HTML 用）-------------------------------
+// docs/SANDBOX_PREVIEW.md。外部参照を持たない HTML はサンドボックスで表示し、
+// インライン <script> / onclick / eval を動かす。
+
+/** HTML が text/html か（charset 等のパラメータ付きでも判定）。 */
+function isHtmlType(type: string): boolean {
+  return type.toLowerCase().startsWith("text/html");
+}
+
+/**
+ * 自己完結 HTML を描画するホストページを生成する。
+ * 元 HTML を JSON 文字列として安全に埋め込み（`<` をエスケープして </script> 注入を防ぐ）、
+ * サンドボックス iframe（緩い CSP）へ preview-host.js が postMessage で渡して描画させる。
+ */
+function buildSandboxHostPage(docHtml: string): string {
+  // JSON.stringify 後に "<" を "<" に置換して、埋め込み <script> の早期終了/注入を防ぐ
+  const embedded = JSON.stringify(docHtml).replace(/</g, "\\u003c");
+  const sandboxUrl = chrome.runtime.getURL("sandbox.html");
+  const hostScriptUrl = chrome.runtime.getURL("assets/preview-host.js");
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DriveWebPreviewer</title>
+<style>html,body{margin:0;height:100%}#dwp-frame{border:0;display:block;width:100%;height:100vh}</style>
+</head><body>
+<script type="application/json" id="dwp-doc">${embedded}</script>
+<iframe id="dwp-frame" src="${sandboxUrl}"></iframe>
+<script type="module" src="${hostScriptUrl}"></script>
+</body></html>`;
+}
+
+/** ルート基準パスを Drive 解決＋取得する ResourceFetcher を作る（インライン化用）。 */
+function makeResourceFetcher(session: PreviewSession): ResourceFetcher {
+  return async (rootPath) => {
+    const resolved = await resolvePathCached(session, rootPath);
+    if (!resolved) return null;
+    const res = await getMediaRaw(resolved.fileId);
+    const buf = await res.arrayBuffer();
+    return {
+      bytes: new Uint8Array(buf),
+      contentType: contentType.resolve(rootPath, resolved.mimeType),
+    };
+  };
+}
+
+/**
+ * エントリ HTML を、構成に応じてサンドボックス or 従来表示の Response にする。
+ * - 相対参照なし（1 ファイル完結）→ そのままサンドボックス（docs/SANDBOX_PREVIEW.md 2）
+ * - 相対参照あり → 全インライン化を試み、完全に取り込めればサンドボックス（同 3.5）。
+ *   取り込めない（取得失敗・ESM 残存・サイズ超過）→ 従来表示にフォールバック（SW が解決）。
+ */
+async function wrapHtmlForPreview(
+  html: string,
+  session: PreviewSession,
+  entryPath: string,
+): Promise<Response> {
+  let body: string;
+  if (!hasRelativeSubresource(html)) {
+    body = buildSandboxHostPage(html);
+  } else {
+    let inlined: string | null = null;
+    try {
+      // バジェットはエントリのサイズガード（LARGE_FILE_THRESHOLD）と基準を揃える
+      inlined = await inlineHtmlResources(html, entryPath, makeResourceFetcher(session), {
+        maxTotalBytes: LARGE_FILE_THRESHOLD,
+      });
+    } catch (err) {
+      // 認証/権限エラーは握りつぶさず外側ハンドラの 401/403 メッセージに委ねる
+      if (err instanceof DriveAuthError || err instanceof DriveForbiddenError) throw err;
+      // サイズ超過・パース失敗等はインライン化を諦める（従来表示へフォールバック）
+      console.warn("[preview] inline failed, fallback to plain:", err);
+      inlined = null;
+    }
+    body = inlined !== null && !hasRelativeSubresource(inlined)
+      ? buildSandboxHostPage(inlined)
+      : html;
+  }
+  return new Response(body, {
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
 // ---- 配信元: デモ ---------------------------------------------------------
 
 function serveFromDemo(relativePath: string): Response {
@@ -138,6 +224,7 @@ async function serveFromDrive(
   session: PreviewSession,
   relativePath: string,
   rangeHeader: string | null,
+  isNavigate: boolean,
 ): Promise<Response> {
   const resolved = await resolvePathCached(session, relativePath);
   if (!resolved) return errorResponse(404, `ファイルが見つかりません: ${relativePath}`);
@@ -160,6 +247,28 @@ async function serveFromDrive(
 
   const driveRes = await getMediaRaw(resolved.fileId, rangeHeader);
   const type = contentType.resolve(relativePath, resolved.mimeType);
+
+  // エントリ HTML（ナビゲーション）は、外部参照が無ければサンドボックスで表示し
+  // インライン JS を動かす（docs/SANDBOX_PREVIEW.md）。Range 要求時は対象外。
+  // 注意: キャッシュキーは (sessionId, relativePath) のみで navigate を区別しない。
+  // エントリは最初に navigate で取得される前提（サンドボックス内は不透明オリジンのため
+  // 後続の再要求が SW に届かない）ので、raw が先にキャッシュされてラップ漏れする不整合は
+  // 実運用では起きない。前提が崩れたらキーに navigate を含める必要がある。
+  if (isNavigate && !rangeHeader && isHtmlType(type)) {
+    // 巨大な自己完結 HTML（data URI を多用したページ等）は全文バッファ＋JSON 複製＋
+    // ホストページ生成でメモリを数倍に展開してしまう。Content-Length が閾値超なら
+    // サンドボックス化せず、下の通常/ストリーミング配信に委ねる（インライン JS は
+    // 動かないが安全側のフォールバック）。Content-Length 不明時はバッファして扱う。
+    const lengthHeader = driveRes.headers.get("Content-Length");
+    const length = lengthHeader ? Number(lengthHeader) : NaN;
+    if (!(Number.isFinite(length) && length > LARGE_FILE_THRESHOLD)) {
+      const html = await driveRes.text();
+      const response = await wrapHtmlForPreview(html, session, relativePath);
+      await cache.put(session.sessionId, relativePath, response.clone());
+      return response;
+    }
+    // 閾値超過 → 以降の通常配信パスへフォールスルー（driveRes.body は未消費）
+  }
 
   // Range 応答（206）: 部分応答はそのまま透過し、キャッシュしない。
   if (rangeHeader && driveRes.status === 206) {
@@ -204,6 +313,8 @@ async function handlePreviewRequest(request: Request): Promise<Response> {
   }
 
   const rangeHeader = request.headers.get("Range");
+  // トップレベルのドキュメント遷移か（サンドボックス出し分けの対象判定に使う）
+  const isNavigate = request.mode === "navigate";
 
   // Range 以外はキャッシュ参照（Range は部分応答のため都度取得）
   if (!rangeHeader) {
@@ -215,7 +326,7 @@ async function handlePreviewRequest(request: Request): Promise<Response> {
     if (session.source === "demo") {
       return serveFromDemo(relativePath);
     }
-    return await serveFromDrive(session, relativePath, rangeHeader);
+    return await serveFromDrive(session, relativePath, rangeHeader, isNavigate);
   } catch (err) {
     console.error("[preview] failed:", err);
     const detail = err instanceof Error ? err.message : String(err);

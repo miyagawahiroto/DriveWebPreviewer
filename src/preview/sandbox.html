@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DriveWebPreviewer</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      サンドボックスページ（docs/SANDBOX_PREVIEW.md）。
+      manifest の sandbox.pages に登録され、緩い CSP（unsafe-inline/unsafe-eval 可）で動く。
+      ホストページ（preview-host.js）から postMessage で受け取った HTML を document.write で
+      描画し、インライン <script> / onclick / eval を実行できるようにする。
+      chrome.* は使えない・不透明オリジンのため、ここでは描画のみを行う。
+    -->
+    <script>
+      window.addEventListener("message", function (event) {
+        // 自ページ（ホスト）からの描画指示のみ受け付ける
+        if (event.source !== window.parent) return;
+        var data = event.data;
+        if (!data || data.type !== "dwp_render" || typeof data.html !== "string") return;
+        document.open();
+        document.write(data.html);
+        document.close();
+      });
+    </script>
+  </body>
+</html>

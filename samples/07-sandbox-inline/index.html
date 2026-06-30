@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>07 サンドボックス・インライン JS テスト</title>
+    <!-- 外部参照は一切なし（CSS/JS インライン・画像は data URI）。
+         → 外部参照が無いので「サンドボックス表示」経路に乗り、インライン JS が動くはず。
+         docs/SANDBOX_PREVIEW.md / docs/SECURITY.md(3.5) -->
+    <style>
+      :root { color-scheme: light; }
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #e8f0fe, #fff);
+        color: #202124;
+        display: grid;
+        place-items: center;
+      }
+      main {
+        background: #fff;
+        padding: 2rem 2.5rem;
+        border-radius: 16px;
+        box-shadow: 0 8px 30px rgba(26, 115, 232, 0.15);
+        max-width: 560px;
+        width: calc(100% - 3rem);
+      }
+      h1 { color: #1a73e8; margin-top: 0; font-size: 1.3rem; }
+      .logo { width: 56px; height: 56px; }
+      ul { list-style: none; padding: 0; }
+      li {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.4rem 0;
+        border-bottom: 1px solid #f1f3f4;
+        font-size: 0.95rem;
+      }
+      .mark { width: 1.4rem; text-align: center; font-weight: 700; }
+      .pending .mark { color: #9aa0a6; }
+      .ok .mark { color: #137333; }
+      .ng .mark { color: #c5221f; }
+      .ng { background: #fce8e6; }
+      .summary {
+        margin-top: 1rem;
+        padding: 0.7rem 1rem;
+        border-radius: 8px;
+        font-weight: 700;
+        text-align: center;
+      }
+      .summary.ok { background: #e6f4ea; color: #137333; }
+      .summary.ng { background: #fce8e6; color: #c5221f; }
+      button {
+        font: inherit;
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: 8px;
+        background: #1a73e8;
+        color: #fff;
+        cursor: pointer;
+      }
+      .hint { color: #5f6368; font-size: 0.85rem; }
+      code { background: #f1f3f4; padding: 1px 5px; border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <!-- data URI 画像（外部参照ではないのでサンドボックス判定に影響しない） -->
+      <img
+        class="logo"
+        alt="logo"
+        src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%234285F4'/><path d='M20 33l9 9 16-18' stroke='white' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>"
+      />
+      <h1>サンドボックス・インライン JS テスト</h1>
+      <p class="hint">
+        外部参照の無い 1 ファイル HTML です。各項目が <strong>✓（緑）</strong> になり、コンソールに
+        CSP 違反が出なければ、サンドボックス表示でインライン JS が動いています。
+      </p>
+
+      <ul id="checks">
+        <li id="c-inline" class="pending"><span class="mark">•</span> インライン <code>&lt;script&gt;</code> が実行された</li>
+        <li id="c-dom" class="pending"><span class="mark">•</span> DOM 操作（テキスト書き換え）ができた</li>
+        <li id="c-eval" class="pending"><span class="mark">•</span> <code>eval()</code> が動いた（sandbox の unsafe-eval）</li>
+        <li id="c-func" class="pending"><span class="mark">•</span> <code>new Function()</code> が動いた</li>
+        <li id="c-timeout" class="pending"><span class="mark">•</span> <code>setTimeout</code> が発火した</li>
+        <li id="c-listener" class="pending"><span class="mark">•</span> <code>addEventListener</code> が登録・発火した</li>
+        <li id="c-onclick" class="pending"><span class="mark">•</span> インライン <code>onclick=</code> が動いた（下のボタンを押す）</li>
+      </ul>
+
+      <p><button onclick="window.__dwpOnclick && window.__dwpOnclick()">onclick を試す</button></p>
+
+      <div id="summary" class="summary">判定中…</div>
+    </main>
+
+    <script>
+      // 各チェック項目の成否を反映するヘルパ
+      function setResult(id, ok) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.classList.remove("pending");
+        el.classList.add(ok ? "ok" : "ng");
+        el.querySelector(".mark").textContent = ok ? "✓" : "✗";
+        updateSummary();
+      }
+      function updateSummary() {
+        var items = document.querySelectorAll("#checks li");
+        var pending = document.querySelectorAll("#checks li.pending").length;
+        var ng = document.querySelectorAll("#checks li.ng").length;
+        var sum = document.getElementById("summary");
+        if (pending > 0) {
+          sum.className = "summary";
+          sum.textContent = "判定中…（onclick はボタン押下で確定）";
+        } else if (ng === 0) {
+          sum.className = "summary ok";
+          sum.textContent = "✓ すべて成功：サンドボックスでインライン JS が動いています";
+        } else {
+          sum.className = "summary ng";
+          sum.textContent = "✗ " + ng + " 件失敗：サンドボックス表示になっていない可能性";
+        }
+      }
+
+      // 1) このスクリプト自体が動いた証明
+      setResult("c-inline", true);
+
+      // 2) DOM 操作
+      try {
+        var probe = document.createElement("span");
+        probe.textContent = "x";
+        setResult("c-dom", probe.textContent === "x");
+      } catch (e) { setResult("c-dom", false); }
+
+      // 3) eval（sandbox CSP の unsafe-eval が効いているか）
+      try {
+        // eslint-disable-next-line no-eval
+        setResult("c-eval", eval("1 + 1") === 2);
+      } catch (e) { setResult("c-eval", false); }
+
+      // 4) new Function
+      try {
+        var f = new Function("a", "b", "return a * b;");
+        setResult("c-func", f(6, 7) === 42);
+      } catch (e) { setResult("c-func", false); }
+
+      // 5) setTimeout
+      try {
+        setTimeout(function () { setResult("c-timeout", true); }, 0);
+      } catch (e) { setResult("c-timeout", false); }
+
+      // 6) addEventListener
+      try {
+        var target = document.createElement("div");
+        var fired = false;
+        target.addEventListener("dwp-test", function () { fired = true; });
+        target.dispatchEvent(new Event("dwp-test"));
+        setResult("c-listener", fired);
+      } catch (e) { setResult("c-listener", false); }
+
+      // 7) インライン onclick 用ハンドラ（ボタンの onclick= から呼ばれる）
+      window.__dwpOnclick = function () { setResult("c-onclick", true); };
+
+      updateSummary();
+    </script>
+  </body>
+</html>

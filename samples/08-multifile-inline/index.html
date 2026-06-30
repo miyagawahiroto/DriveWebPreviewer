@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>08 複数ファイル＋インライン JS テスト</title>
+    <!-- 外部参照（相対）の CSS / JS を持ちつつ、インライン JS も使う構成。
+         SW が style.css / app.js / logo.svg を全インライン化 → 自己完結化 →
+         サンドボックス表示でインライン JS も動く（docs/SANDBOX_PREVIEW.md 3.5）。 -->
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <img class="logo" src="logo.svg" alt="logo" width="56" height="56" />
+      <h1>複数ファイル＋インライン JS テスト</h1>
+      <p class="hint">
+        相対参照の <code>style.css</code> / <code>app.js</code> / <code>logo.svg</code> を持つ
+        複数ファイル構成です。全インライン化されてサンドボックス表示になり、外部参照と
+        <strong>インライン JS の両方</strong>が動けば成功です。
+      </p>
+
+      <ul id="checks">
+        <li id="c-css" class="pending"><span class="mark">•</span> 外部 CSS（<code>style.css</code>）が適用された</li>
+        <li id="c-img" class="pending"><span class="mark">•</span> 外部画像（<code>logo.svg</code>）が表示された</li>
+        <li id="c-extjs" class="pending"><span class="mark">•</span> 外部 JS（<code>app.js</code>）が実行された</li>
+        <li id="c-inline" class="pending"><span class="mark">•</span> インライン <code>&lt;script&gt;</code> が実行された</li>
+        <li id="c-eval" class="pending"><span class="mark">•</span> <code>eval()</code> が動いた</li>
+        <li id="c-onclick" class="pending"><span class="mark">•</span> インライン <code>onclick=</code> が動いた（下のボタンを押す）</li>
+      </ul>
+
+      <p><button onclick="window.__dwpOnclick && window.__dwpOnclick()">onclick を試す</button></p>
+      <div id="summary" class="summary">判定中…</div>
+    </main>
+
+    <!-- 外部 JS（相対参照）。インライン化されて実行される。 -->
+    <script src="app.js"></script>
+
+    <!-- インライン JS。サンドボックスでのみ動く。 -->
+    <script>
+      function setResult(id, ok) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.classList.remove("pending");
+        el.classList.add(ok ? "ok" : "ng");
+        el.querySelector(".mark").textContent = ok ? "✓" : "✗";
+        updateSummary();
+      }
+      function updateSummary() {
+        var pending = document.querySelectorAll("#checks li.pending").length;
+        var ng = document.querySelectorAll("#checks li.ng").length;
+        var sum = document.getElementById("summary");
+        if (pending > 0) {
+          sum.className = "summary";
+          sum.textContent = "判定中…（onclick はボタン押下で確定）";
+        } else if (ng === 0) {
+          sum.className = "summary ok";
+          sum.textContent = "✓ すべて成功：複数ファイル＋インライン JS が動いています";
+        } else {
+          sum.className = "summary ng";
+          sum.textContent = "✗ " + ng + " 件失敗";
+        }
+      }
+
+      // 外部 CSS が当たっているか（style.css が body 背景を設定）
+      try {
+        var bg = getComputedStyle(document.body).backgroundImage || "";
+        var hasGradient = bg.indexOf("gradient") >= 0;
+        setResult("c-css", hasGradient);
+      } catch (e) { setResult("c-css", false); }
+
+      // 画像が読めたか（data URI 化されていれば complete & naturalWidth>0）
+      var logo = document.querySelector(".logo");
+      if (logo && logo.complete && logo.naturalWidth > 0) setResult("c-img", true);
+      else if (logo) {
+        logo.addEventListener("load", function () { setResult("c-img", true); });
+        logo.addEventListener("error", function () { setResult("c-img", false); });
+      }
+
+      // 外部 JS（app.js）が window.__dwpExternal をセットしたか
+      setResult("c-extjs", window.__dwpExternal === true);
+
+      // インライン script 実行の証明
+      setResult("c-inline", true);
+
+      // eval
+      try { setResult("c-eval", eval("3 * 7") === 21); } catch (e) { setResult("c-eval", false); }
+
+      // onclick 用
+      window.__dwpOnclick = function () { setResult("c-onclick", true); };
+
+      updateSummary();
+    </script>
+  </body>
+</html>

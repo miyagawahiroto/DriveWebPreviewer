@@ -71,6 +71,9 @@ const entryPoints = {
   "content/content-script": resolve(srcDir, "content/content-script.ts"),
   "popup/popup": resolve(srcDir, "popup/popup.ts"),
   "options/options": resolve(srcDir, "options/options.ts"),
+  // サンドボックス表示のホストページ用ブートストラップ（docs/SANDBOX_PREVIEW.md）。
+  // preview/ 配下を避け assets/ に出力（SW にインターセプトされない位置）。
+  "assets/preview-host": resolve(srcDir, "preview/preview-host.ts"),
 };
 
 /** dist へそのままコピーする静的アセット（manifest.json は writeManifest で別途生成） */
@@ -141,6 +144,15 @@ async function copyStatic() {
     await mkdir(dirname(to), { recursive: true });
     await cp(from, to);
   }
+  // サンドボックスページは dist 直下へ（preview/ 配下に置くと SW がインターセプトする）。
+  // manifest の sandbox.pages: ["sandbox.html"] と一致させる（docs/SANDBOX_PREVIEW.md）。
+  const sandboxFrom = resolve(srcDir, "preview/sandbox.html");
+  if (existsSync(sandboxFrom)) {
+    await cp(sandboxFrom, resolve(outDir, "sandbox.html"));
+  } else {
+    console.warn("[build] skip missing asset: src/preview/sandbox.html");
+  }
+
   // アイコン等のディレクトリ（あればコピー）
   const iconsDir = resolve(srcDir, "icons");
   if (existsSync(iconsDir)) {
